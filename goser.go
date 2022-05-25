@@ -233,7 +233,15 @@ func Marshal(obj any) ([]byte, error) {
 	return serialized, nil
 }
 
-func Unmarshal(serialized []byte) (any, []byte, error) {
+func Unmarshal(serialized []byte) (any, error) {
+	value, serialized, err := unmarshalRecursive(serialized)
+	if len(serialized) > 0 {
+		return nil, fmt.Errorf("couldn't consume all the provided bytes")
+	}
+	return value, err
+}
+
+func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 	if len(serialized) < 1 {
 		return nil, nil, fmt.Errorf("can't read kind %v", serialized)
 	}
@@ -337,7 +345,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		serialized = serialized[length:]
 		return value, serialized, nil
 	case reflect.Pointer:
-		obj, serialized, err := Unmarshal(serialized)
+		obj, serialized, err := unmarshalRecursive(serialized)
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't deserialize pointer contents: %w", err)
 		}
@@ -350,7 +358,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		}
 		length := binary.LittleEndian.Uint64(serialized[:8])
 		serialized = serialized[8:]
-		typeMarker, serialized, err := Unmarshal(serialized)
+		typeMarker, serialized, err := unmarshalRecursive(serialized)
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't deserialize array type marker: %w", err)
 		}
@@ -359,7 +367,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		for i := 0; i < int(length); i++ {
 			var item any
 			var err error
-			item, serialized, err = Unmarshal(serialized)
+			item, serialized, err = unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize array item: %w", err)
 			}
@@ -372,7 +380,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		}
 		length := binary.LittleEndian.Uint64(serialized[:8])
 		serialized = serialized[8:]
-		typeMarker, serialized, err := Unmarshal(serialized)
+		typeMarker, serialized, err := unmarshalRecursive(serialized)
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't deserialize slice type marker: %w", err)
 		}
@@ -380,7 +388,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		for i := 0; i < int(length); i++ {
 			var item any
 			var err error
-			item, serialized, err = Unmarshal(serialized)
+			item, serialized, err = unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize slice item: %w", err)
 			}
@@ -393,11 +401,11 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		}
 		length := binary.LittleEndian.Uint64(serialized[:8])
 		serialized = serialized[8:]
-		keyTypeMarker, serialized, err := Unmarshal(serialized)
+		keyTypeMarker, serialized, err := unmarshalRecursive(serialized)
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't deserialize map key type marker: %w", err)
 		}
-		valueTypeMarker, serialized, err := Unmarshal(serialized)
+		valueTypeMarker, serialized, err := unmarshalRecursive(serialized)
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't deserialize map value type marker: %w", err)
 		}
@@ -405,11 +413,11 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 		for i := 0; i < int(length); i++ {
 			var key, itemValue any
 			var err error
-			key, serialized, err = Unmarshal(serialized)
+			key, serialized, err = unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize map key: %w", err)
 			}
-			itemValue, serialized, err = Unmarshal(serialized)
+			itemValue, serialized, err = unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize map value: %w", err)
 			}
@@ -431,7 +439,7 @@ func Unmarshal(serialized []byte) (any, []byte, error) {
 			field := structCopy.Field(i)
 			var fieldValue any
 			var err error
-			fieldValue, serialized, err = Unmarshal(serialized)
+			fieldValue, serialized, err = unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
 			}
