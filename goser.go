@@ -131,11 +131,16 @@ func Marshal(obj any) ([]byte, error) {
 		serialized = append(serialized, encodedLength...)
 		serialized = append(serialized, []byte(value.Interface().(string))...)
 	case reflect.Pointer:
-		encodedPointerContents, err := Marshal(value.Elem().Interface())
-		if err != nil {
-			return nil, fmt.Errorf("couldn't serialize pointer contents: %w", err)
+		if !value.IsNil() {
+			serialized = append(serialized, 1)
+			encodedPointerContents, err := Marshal(value.Elem().Interface())
+			if err != nil {
+				return nil, fmt.Errorf("couldn't serialize pointer contents: %w", err)
+			}
+			serialized = append(serialized, encodedPointerContents...)
+		} else {
+			serialized = append(serialized, 0)
 		}
-		serialized = append(serialized, encodedPointerContents...)
 	case reflect.Array:
 		encodedLength := make([]byte, 8)
 		length := value.Len()
@@ -345,13 +350,22 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 		serialized = serialized[length:]
 		return value, serialized, nil
 	case reflect.Pointer:
-		obj, serialized, err := unmarshalRecursive(serialized)
-		if err != nil {
-			return nil, nil, fmt.Errorf("couldn't deserialize pointer contents: %w", err)
+		if len(serialized) < 1 {
+			return nil, nil, fmt.Errorf("can't read pointer nil status %v", serialized)
 		}
-		pointer := reflect.New(reflect.TypeOf(obj))
-		pointer.Elem().Set(reflect.ValueOf(obj))
-		return pointer.Interface(), serialized, nil
+		nonNil := uint8(serialized[0])
+		serialized = serialized[1:]
+		if nonNil == 1 {
+			obj, serialized, err := unmarshalRecursive(serialized)
+			if err != nil {
+				return nil, nil, fmt.Errorf("couldn't deserialize pointer contents: %w", err)
+			}
+			pointer := reflect.New(reflect.TypeOf(obj))
+			pointer.Elem().Set(reflect.ValueOf(obj))
+			return pointer.Interface(), serialized, nil
+		} else {
+			return nil, serialized, nil
+		}
 	case reflect.Array:
 		if len(serialized) < 8 {
 			return nil, nil, fmt.Errorf("can't read array length %v", serialized)
@@ -443,8 +457,14 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
 			}
-			unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-			unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+			skipDataCopy := false
+			if field.Kind() == reflect.Pointer && field.IsNil() {
+				skipDataCopy = true
+			}
+			if !skipDataCopy {
+				unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+				unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+			}
 		}
 		return structCopy.Interface(), serialized, nil
 	case reflect.Chan:
