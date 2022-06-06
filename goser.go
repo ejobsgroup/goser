@@ -458,7 +458,7 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 				return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
 			}
 			skipDataCopy := false
-			if field.Kind() == reflect.Pointer && field.IsNil() {
+			if field.Kind() == reflect.Pointer && fieldValue == nil {
 				skipDataCopy = true
 			}
 			if !skipDataCopy {
