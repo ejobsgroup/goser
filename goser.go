@@ -49,7 +49,12 @@ func Register(valueOfType any) {
 
 func Marshal(obj any) ([]byte, error) {
 	thetype := reflect.TypeOf(obj)
-	kind := thetype.Kind()
+	var kind reflect.Kind
+	if thetype == nil {
+		kind = reflect.Pointer
+	} else {
+		kind = thetype.Kind()
+	}
 	value := reflect.ValueOf(obj)
 	serialized := make([]byte, 0)
 	serialized = append(serialized, byte(kind))
@@ -131,7 +136,7 @@ func Marshal(obj any) ([]byte, error) {
 		serialized = append(serialized, encodedLength...)
 		serialized = append(serialized, []byte(value.Interface().(string))...)
 	case reflect.Pointer:
-		if !value.IsNil() {
+		if obj != nil && !value.IsNil() {
 			serialized = append(serialized, 1)
 			encodedPointerContents, err := Marshal(value.Elem().Interface())
 			if err != nil {
@@ -457,11 +462,7 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
 			}
-			skipDataCopy := false
-			if field.Kind() == reflect.Pointer && fieldValue == nil {
-				skipDataCopy = true
-			}
-			if !skipDataCopy {
+			if fieldValue != nil {
 				unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 				unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
 			}
