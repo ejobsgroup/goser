@@ -260,10 +260,10 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 
 	switch kind {
 	case reflect.Bool:
-		if len(serialized) < 2 {
+		if len(serialized) < 1 {
 			return nil, nil, fmt.Errorf("can't read bool %v", serialized)
 		}
-		if serialized[1] == 1 {
+		if serialized[0] == 1 {
 			return true, serialized[1:], nil
 		}
 		return false, serialized[1:], nil
