@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"math"
 	"reflect"
+	"time"
 	"unsafe"
 )
 
@@ -217,23 +218,33 @@ func Marshal(obj any) ([]byte, error) {
 			serialized = append(serialized, encodedValue...)
 		}
 	case reflect.Struct:
-		typeId, typeKnown := typeToId[thetype]
-		if !typeKnown {
-			return nil, fmt.Errorf("can't serialize type %v (not registered)", thetype)
-		}
-		encodedTypeId := make([]byte, 4)
-		binary.LittleEndian.PutUint32(encodedTypeId, typeId)
-		serialized = append(serialized, encodedTypeId...)
-		for i := 0; i < value.NumField(); i++ {
-			structCopy := reflect.New(thetype).Elem()
-			structCopy.Set(value)
-			unsafeField := structCopy.Field(i)
-			unsafeField = reflect.NewAt(unsafeField.Type(), unsafe.Pointer(unsafeField.UnsafeAddr())).Elem()
-			encodedField, err := Marshal(unsafeField.Interface())
+		if timeObj, ok := obj.(time.Time); ok {
+			encodedTypeId := []byte("time")
+			serialized = append(serialized, encodedTypeId...)
+			encodedField, err := Marshal(timeObj.Format(time.RFC3339Nano))
 			if err != nil {
-				return nil, fmt.Errorf("couldn't serialize struct field: %w", err)
+				return nil, fmt.Errorf("couldn't serialize time.Time field: %w", err)
 			}
 			serialized = append(serialized, encodedField...)
+		} else {
+			typeId, typeKnown := typeToId[thetype]
+			if !typeKnown {
+				return nil, fmt.Errorf("can't serialize type %v (not registered)", thetype)
+			}
+			encodedTypeId := make([]byte, 4)
+			binary.LittleEndian.PutUint32(encodedTypeId, typeId)
+			serialized = append(serialized, encodedTypeId...)
+			for i := 0; i < value.NumField(); i++ {
+				structCopy := reflect.New(thetype).Elem()
+				structCopy.Set(value)
+				unsafeField := structCopy.Field(i)
+				unsafeField = reflect.NewAt(unsafeField.Type(), unsafe.Pointer(unsafeField.UnsafeAddr())).Elem()
+				encodedField, err := Marshal(unsafeField.Interface())
+				if err != nil {
+					return nil, fmt.Errorf("couldn't serialize struct field: %w", err)
+				}
+				serialized = append(serialized, encodedField...)
+			}
 		}
 	case reflect.Chan:
 		return nil, fmt.Errorf("can't serialize channel (%v)", kind)
@@ -447,27 +458,43 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 		if len(serialized) < 4 {
 			return nil, nil, fmt.Errorf("can't read struct type id %v", serialized)
 		}
-		typeId := binary.LittleEndian.Uint32(serialized[:4])
-		theType, typeKnown := idToType[typeId]
-		if !typeKnown {
-			return nil, nil, fmt.Errorf("can't deserialize type id %v (not registered)", typeId)
-		}
-		serialized = serialized[4:]
-		structCopy := reflect.New(theType).Elem()
-		for i := 0; i < structCopy.NumField(); i++ {
-			field := structCopy.Field(i)
-			var fieldValue any
-			var err error
-			fieldValue, serialized, err = unmarshalRecursive(serialized)
+		if string(serialized[:4]) == "time" {
+			value, serialized, err := unmarshalRecursive(serialized)
 			if err != nil {
-				return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
+				return nil, nil, fmt.Errorf("couldn't deserialize time as string: %w", err)
 			}
-			if fieldValue != nil {
-				unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-				unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+			if timeAsStr, ok := value.(string); ok {
+				parsedTime, err := time.Parse(timeAsStr, time.RFC3339Nano)
+				if err != nil {
+					return nil, nil, fmt.Errorf("couldn't parse time as string: %w", err)
+				}
+				return parsedTime, serialized, nil
+			} else {
+				return nil, nil, fmt.Errorf("expected time as string but got %T", value)
 			}
+		} else {
+			typeId := binary.LittleEndian.Uint32(serialized[:4])
+			theType, typeKnown := idToType[typeId]
+			if !typeKnown {
+				return nil, nil, fmt.Errorf("can't deserialize type id %v (not registered)", typeId)
+			}
+			serialized = serialized[4:]
+			structCopy := reflect.New(theType).Elem()
+			for i := 0; i < structCopy.NumField(); i++ {
+				field := structCopy.Field(i)
+				var fieldValue any
+				var err error
+				fieldValue, serialized, err = unmarshalRecursive(serialized)
+				if err != nil {
+					return nil, nil, fmt.Errorf("couldn't deserialize struct field: %w", err)
+				}
+				if fieldValue != nil {
+					unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+					unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+				}
+			}
+			return structCopy.Interface(), serialized, nil
 		}
-		return structCopy.Interface(), serialized, nil
 	case reflect.Chan:
 		return nil, nil, fmt.Errorf("can't deserialize channel (%v)", kind)
 	default:
