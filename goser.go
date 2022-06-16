@@ -459,6 +459,7 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 			return nil, nil, fmt.Errorf("can't read struct type id %v", serialized)
 		}
 		if string(serialized[:4]) == "time" {
+			serialized = serialized[4:]
 			value, serialized, err := unmarshalRecursive(serialized)
 			if err != nil {
 				return nil, nil, fmt.Errorf("couldn't deserialize time as string: %w", err)
