@@ -221,7 +221,7 @@ func Marshal(obj any) ([]byte, error) {
 		if timeObj, ok := obj.(time.Time); ok {
 			encodedTypeId := []byte("time")
 			serialized = append(serialized, encodedTypeId...)
-			encodedField, err := Marshal(timeObj.Format(time.RFC3339Nano))
+			encodedField, err := Marshal(timeObj.Format("2006-01-02T15:04:05"))
 			if err != nil {
 				return nil, fmt.Errorf("couldn't serialize time.Time field: %w", err)
 			}
@@ -465,7 +465,7 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 				return nil, nil, fmt.Errorf("couldn't deserialize time as string: %w", err)
 			}
 			if timeAsStr, ok := value.(string); ok {
-				parsedTime, err := time.Parse(timeAsStr, time.RFC3339Nano)
+				parsedTime, err := time.Parse(timeAsStr, "2006-01-02T15:04:05")
 				if err != nil {
 					return nil, nil, fmt.Errorf("couldn't parse time as string: %w", err)
 				}
