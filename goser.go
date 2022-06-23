@@ -221,10 +221,7 @@ func Marshal(obj any) ([]byte, error) {
 		if timeObj, ok := obj.(time.Time); ok {
 			encodedTypeId := []byte("time")
 			serialized = append(serialized, encodedTypeId...)
-			encodedField, err := Marshal(timeObj.Format(time.RFC3339Nano))
-			if err != nil {
-				return nil, fmt.Errorf("couldn't serialize time.Time field: %w", err)
-			}
+			encodedField, _ := Marshal(timeObj.Format(time.RFC3339Nano))
 			serialized = append(serialized, encodedField...)
 		} else {
 			typeId, typeKnown := typeToId[thetype]
@@ -282,7 +279,7 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 		if len(serialized) < 8 {
 			return nil, nil, fmt.Errorf("can't read int %v", serialized)
 		}
-		return binary.LittleEndian.Uint64(serialized[:8]), serialized[8:], nil
+		return int(binary.LittleEndian.Uint64(serialized[:8])), serialized[8:], nil
 	case reflect.Int8:
 		if len(serialized) < 1 {
 			return nil, nil, fmt.Errorf("can't read int8 %v", serialized)
@@ -292,22 +289,22 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 		if len(serialized) < 2 {
 			return nil, nil, fmt.Errorf("can't read int16 %v", serialized)
 		}
-		return binary.LittleEndian.Uint16(serialized[:2]), serialized[2:], nil
+		return int16(binary.LittleEndian.Uint16(serialized[:2])), serialized[2:], nil
 	case reflect.Int32:
 		if len(serialized) < 4 {
 			return nil, nil, fmt.Errorf("can't read int32 %v", serialized)
 		}
-		return binary.LittleEndian.Uint32(serialized[:4]), serialized[4:], nil
+		return int32(binary.LittleEndian.Uint32(serialized[:4])), serialized[4:], nil
 	case reflect.Int64:
 		if len(serialized) < 8 {
 			return nil, nil, fmt.Errorf("can't read int64 %v", serialized)
 		}
-		return binary.LittleEndian.Uint64(serialized[:8]), serialized[8:], nil
+		return int64(binary.LittleEndian.Uint64(serialized[:8])), serialized[8:], nil
 	case reflect.Uint:
 		if len(serialized) < 8 {
 			return nil, nil, fmt.Errorf("can't read uint %v", serialized)
 		}
-		return binary.LittleEndian.Uint64(serialized[:8]), serialized[8:], nil
+		return uint(binary.LittleEndian.Uint64(serialized[:8])), serialized[8:], nil
 	case reflect.Uint8:
 		if len(serialized) < 1 {
 			return nil, nil, fmt.Errorf("can't read uint8 %v", serialized)
