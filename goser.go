@@ -488,7 +488,13 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 				}
 				if fieldValue != nil {
 					unsafeField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-					unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+					if field.Kind() == reflect.Ptr {
+						newPointer := reflect.New(field.Type().Elem())
+						unsafeField.Set(newPointer)
+						newPointer.Elem().Set(reflect.ValueOf(fieldValue).Elem().Convert(field.Type().Elem()))
+					} else {
+						unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
+					}
 				}
 			}
 			return structCopy.Interface(), serialized, nil
