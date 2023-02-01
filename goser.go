@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"math"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -221,7 +222,11 @@ func Marshal(obj any) ([]byte, error) {
 		if timeObj, ok := obj.(time.Time); ok {
 			encodedTypeId := []byte("time")
 			serialized = append(serialized, encodedTypeId...)
-			encodedField, _ := Marshal(timeObj.Format(time.RFC3339Nano))
+			formattedTime := timeObj.Format(time.RFC3339Nano)
+			if strings.HasPrefix(formattedTime, "-") {
+				return nil, fmt.Errorf("couldn't format time obj=%v", timeObj)
+			}
+			encodedField, _ := Marshal(formattedTime)
 			serialized = append(serialized, encodedField...)
 		} else {
 			typeId, typeKnown := typeToId[thetype]
