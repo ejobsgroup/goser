@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"math"
 	"reflect"
-	"strings"
 	"time"
 	"unsafe"
 )
@@ -222,11 +221,7 @@ func Marshal(obj any) ([]byte, error) {
 		if timeObj, ok := obj.(time.Time); ok {
 			encodedTypeId := []byte("time")
 			serialized = append(serialized, encodedTypeId...)
-			formattedTime := timeObj.Format(time.RFC3339Nano)
-			if strings.HasPrefix(formattedTime, "-") {
-				return nil, fmt.Errorf("couldn't format time obj=%v", timeObj)
-			}
-			encodedField, _ := Marshal(formattedTime)
+			encodedField, _ := Marshal(timeObj.UnixMicro())
 			serialized = append(serialized, encodedField...)
 		} else {
 			typeId, typeKnown := typeToId[thetype]
@@ -464,16 +459,12 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 			serialized = serialized[4:]
 			value, serialized, err := unmarshalRecursive(serialized)
 			if err != nil {
-				return nil, nil, fmt.Errorf("couldn't deserialize time as string: %w", err)
+				return nil, nil, fmt.Errorf("couldn't deserialize time as int64: %w", err)
 			}
-			if timeAsStr, ok := value.(string); ok {
-				parsedTime, err := time.Parse(time.RFC3339Nano, timeAsStr)
-				if err != nil {
-					return nil, nil, fmt.Errorf("couldn't parse time as string: %w", err)
-				}
-				return parsedTime, serialized, nil
+			if timeAsInt64, ok := value.(int64); ok {
+				return time.UnixMicro(timeAsInt64), serialized, nil
 			} else {
-				return nil, nil, fmt.Errorf("expected time as string but got %T", value)
+				return nil, nil, fmt.Errorf("expected time as int64 but got %T", value)
 			}
 		} else {
 			typeId := binary.LittleEndian.Uint32(serialized[:4])
