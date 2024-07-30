@@ -487,11 +487,13 @@ func unmarshalRecursive(serialized []byte) (any, []byte, error) {
 					if field.Kind() == reflect.Ptr {
 						newPointer := reflect.New(field.Type().Elem())
 						unsafeField.Set(newPointer)
-						if reflect.ValueOf(fieldValue).Elem().CanConvert(field.Type().Elem()) {
-							newPointer.Elem().Set(reflect.ValueOf(fieldValue).Elem().Convert(field.Type().Elem()))
-						} else {
+						if reflect.ValueOf(fieldValue).Kind() != reflect.Ptr {
+							return nil, nil, fmt.Errorf("expected pointer but got %v", reflect.TypeOf(fieldValue))
+						}
+						if !reflect.ValueOf(fieldValue).Elem().CanConvert(field.Type().Elem()) {
 							return nil, nil, fmt.Errorf("can't convert %v to %v", reflect.TypeOf(fieldValue).Elem(), field.Type().Elem())
 						}
+						newPointer.Elem().Set(reflect.ValueOf(fieldValue).Elem().Convert(field.Type().Elem()))
 					} else {
 						if reflect.ValueOf(fieldValue).CanConvert(field.Type()) {
 							unsafeField.Set(reflect.ValueOf(fieldValue).Convert(field.Type()))
